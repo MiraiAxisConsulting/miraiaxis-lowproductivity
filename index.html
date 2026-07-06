@@ -1343,7 +1343,15 @@ function submitAssessment(){
 }
 
 async function generateAndSendReport(org,overall,overallStr,bandLabel,dimScores,rev){
-  let pdfBlob=null;
+  let pdfBase64=null;
+  const panel=document.getElementById('resultsPanel');
+  const prevDisplay=panel.style.display;
+  panel.style.display='block';
+  panel.style.position='fixed';
+  panel.style.top='0';
+  panel.style.left='-9999px';
+  panel.style.width='680px';
+  await new Promise(r=>setTimeout(r,400));
   try{
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF('p','pt','a4');
@@ -1468,37 +1476,46 @@ async function generateAndSendReport(org,overall,overallStr,bandLabel,dimScores,
       y+=lines.length*14+6;
     });
 
-    pdfBlob=pdf.output('blob');
+    const dataUri=pdf.output('datauristring');
+    pdfBase64=dataUri.split(',')[1];
   }catch(err){
     console.error('PDF generation failed, will send data only.',err);
   }
+  panel.style.display=prevDisplay||'none';
+  panel.style.position='';
+  panel.style.top='';
+  panel.style.left='';
+  panel.style.width='';
 
-  const fd=new FormData();
-  fd.append('Organisation',org);
-  fd.append('Respondent Name',document.getElementById('respName').value);
-  fd.append('Role',document.getElementById('respRole').value);
-  fd.append('Industry',document.getElementById('industry').value);
-  fd.append('Annual Revenue (Cr)',document.getElementById('revenue').value);
-  fd.append('Location',document.getElementById('plantLocation').value);
-  fd.append('Assessment Date',document.getElementById('assessDate').value);
-  fd.append('Overall Score',overallStr);
-  fd.append('Readiness Band',bandLabel);
-  fd.append('Framework','5A-ProductivityAxis — Low Productivity');
-  DIMS.forEach((d,di)=>{fd.append('Score — '+d.name,dimScores[di].toFixed(2));});
-  if(rev){fd.append('Estimated Gap (Cr)',(rev*0.10*(1-(overall/5))).toFixed(1));}
-  fd.append('access_key','33488906-4001-44bb-995f-e72344238259');
-  fd.append('subject','New 5A Low Productivity Assessment — '+org);
-  fd.append('from_name','Mirai Axis Assessment Form');
-  if(pdfBlob){
-    const safeOrg=(org||'Client').replace(/[^a-z0-9]+/gi,'_');
-    fd.append('attachment',pdfBlob,'MiraiAxis_LowProductivity_Report_'+safeOrg+'.pdf');
+  const safeOrg=(org||'Client').replace(/[^a-z0-9]+/gi,'_');
+  const payload={
+    'Organisation':org,
+    'Respondent Name':document.getElementById('respName').value,
+    'Role':document.getElementById('respRole').value,
+    'Industry':document.getElementById('industry').value,
+    'Annual Revenue (Cr)':document.getElementById('revenue').value,
+    'Location':document.getElementById('plantLocation').value,
+    'Assessment Date':document.getElementById('assessDate').value,
+    'Overall Score':overallStr,
+    'Readiness Band':bandLabel,
+    'Framework':'5A-ProductivityAxis — Low Productivity'
+  };
+  DIMS.forEach((d,di)=>{payload['Score — '+d.name]=dimScores[di].toFixed(2);});
+  if(rev){payload['Estimated Gap (Cr)']=(rev*0.10*(1-(overall/5))).toFixed(1);}
+  if(pdfBase64){
+    payload.pdfBase64=pdfBase64;
+    payload.filename='MiraiAxis_LowProductivity_Report_'+safeOrg+'.pdf';
   }
   try{
-    const resp=await fetch('https://api.web3forms.com/submit',{method:'POST',headers:{'Accept':'application/json'},body:fd});
+    const resp=await fetch('https://script.google.com/macros/s/AKfycbxFAZD5BI0p5eCEQgsKPeAOBy2COvF8yV_cw56YUyW1V8NKYLrlqPYx00RNyJljaOqM/exec',{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload)
+    });
     const result=await resp.json();
-    console.log('Web3Forms response:',result);
+    console.log('Apps Script response:',result);
     if(!result.success){
-      console.error('Web3Forms rejected the submission:',result.message);
+      console.error('Apps Script reported an error:',result.error);
     }
   }catch(err){
     console.error('Submission failed',err);
