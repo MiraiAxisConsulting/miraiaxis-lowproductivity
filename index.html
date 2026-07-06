@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mirai Axis — 5A-ProductivityAxis™ Low Productivity Assessment Questionnaire</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,sans-serif;background:#F0F2F8;color:#1B2A4A;min-height:100vh}
@@ -1337,7 +1339,163 @@ function submitAssessment(){
   renderRadar(dimScores);
   document.getElementById('thankYouPanel').classList.add('show');
   document.getElementById('thankYouPanel').scrollIntoView({behavior:'smooth'});
-  sendToFormspree(org,overall,overallStr,band.label,dimScores,rev);
+  generateAndSendReport(org,overall,overallStr,band.label,dimScores,rev);
+}
+
+async function generateAndSendReport(org,overall,overallStr,bandLabel,dimScores,rev){
+  let pdfBlob=null;
+  try{
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF('p','pt','a4');
+    const pageW=595.28;
+    const navy=[27,42,74], gold=[201,168,76];
+    let y=50;
+
+    pdf.setFont('helvetica','bold');
+    pdf.setFontSize(18);
+    pdf.setTextColor(...navy);
+    pdf.text('Mirai Axis Consulting LLP',40,y);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica','normal');
+    pdf.setTextColor(120,120,120);
+    y+=18;
+    pdf.text('Low Productivity Intelligence Assessment — Internal Report',40,y);
+    y+=6;
+    pdf.setDrawColor(...gold);
+    pdf.setLineWidth(1.2);
+    pdf.line(40,y+6,pageW-40,y+6);
+    y+=30;
+
+    pdf.setFontSize(11);
+    pdf.setTextColor(60,60,60);
+    const respName=document.getElementById('respName').value||'—';
+    const respRole=document.getElementById('respRole').value||'—';
+    const industry=document.getElementById('industry').value||'—';
+    const location=document.getElementById('plantLocation').value||'—';
+    const assessDate=document.getElementById('assessDate').value||'—';
+    const details=[
+      ['Organisation',org],
+      ['Respondent',respName+'  ('+respRole+')'],
+      ['Industry',industry],
+      ['Location',location],
+      ['Assessment Date',assessDate],
+      ['Annual Revenue (Cr)',rev?('₹'+rev):'—'],
+    ];
+    details.forEach(([label,val])=>{
+      pdf.setFont('helvetica','bold');
+      pdf.text(label+':',40,y);
+      pdf.setFont('helvetica','normal');
+      pdf.text(String(val),190,y);
+      y+=16;
+    });
+    y+=14;
+
+    pdf.setFillColor(245,246,250);
+    pdf.roundedRect(40,y,pageW-80,60,6,6,'F');
+    pdf.setFont('helvetica','bold');
+    pdf.setFontSize(22);
+    pdf.setTextColor(...navy);
+    pdf.text(overallStr+' / 5.00',55,y+38);
+    pdf.setFontSize(11);
+    pdf.setTextColor(150,110,20);
+    pdf.text(bandLabel,55,y+52);
+    if(rev){
+      const gap=(rev*0.10*(1-(overall/5))).toFixed(1);
+      pdf.setFont('helvetica','bold');
+      pdf.setFontSize(13);
+      pdf.setTextColor(...navy);
+      pdf.text('Estimated Productivity Gap: ₹'+gap+' Crores',300,y+32);
+    }
+    y+=85;
+
+    if(radarChart){
+      try{
+        const chartImg=radarChart.toBase64Image('image/png',1.0);
+        const imgSize=260;
+        pdf.setFont('helvetica','bold');
+        pdf.setFontSize(12);
+        pdf.setTextColor(...navy);
+        pdf.text('Current vs Best-in-Class — Gap Radar',40,y);
+        y+=10;
+        pdf.addImage(chartImg,'PNG',(pageW-imgSize)/2,y,imgSize,imgSize);
+        y+=imgSize+20;
+      }catch(chartErr){
+        console.error('Chart image failed, continuing without it.',chartErr);
+      }
+    }
+
+    if(y>680){pdf.addPage();y=50;}
+    pdf.setFont('helvetica','bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(...navy);
+    pdf.text('Dimension Breakdown',40,y);
+    y+=18;
+    pdf.setFontSize(10);
+    DIMS.forEach((d,di)=>{
+      if(y>760){pdf.addPage();y=50;}
+      const s=dimScores[di];
+      pdf.setFont('helvetica','bold');
+      pdf.setTextColor(...navy);
+      pdf.text(d.code+' — '+d.name,40,y);
+      pdf.setFont('helvetica','normal');
+      pdf.setTextColor(80,80,80);
+      pdf.text(s.toFixed(2)+' / 5.00  ('+getBand(s).label+')',400,y);
+      y+=16;
+    });
+    y+=14;
+
+    if(y>700){pdf.addPage();y=50;}
+    const sorted=[...dimScores.map((s,i)=>({s,i}))].sort((a,b)=>b.s-a.s);
+    const top3=sorted.slice(0,3).map(x=>DIMS[x.i].name).join(', ');
+    const bot3=sorted.slice(-3).reverse().map(x=>DIMS[x.i].name).join(', ');
+    pdf.setFont('helvetica','bold');
+    pdf.setFontSize(12);
+    pdf.setTextColor(...navy);
+    pdf.text('Recommended Next Steps',40,y);
+    y+=18;
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica','normal');
+    pdf.setTextColor(80,80,80);
+    const notes=[
+      'Share this report with leadership and align on priority gaps.',
+      'Focus first on lowest-scoring dimensions: '+bot3+'.',
+      'Schedule a consultant-led Gemba diagnostic to validate scores and build a 90-day action plan.',
+      'Protect and build on strongest dimensions: '+top3+'.'
+    ];
+    notes.forEach(n=>{
+      const lines=pdf.splitTextToSize(n,pageW-80);
+      pdf.text(lines,40,y);
+      y+=lines.length*14+6;
+    });
+
+    pdfBlob=pdf.output('blob');
+  }catch(err){
+    console.error('PDF generation failed, will send data only.',err);
+  }
+
+  const fd=new FormData();
+  fd.append('Organisation',org);
+  fd.append('Respondent Name',document.getElementById('respName').value);
+  fd.append('Role',document.getElementById('respRole').value);
+  fd.append('Industry',document.getElementById('industry').value);
+  fd.append('Annual Revenue (Cr)',document.getElementById('revenue').value);
+  fd.append('Location',document.getElementById('plantLocation').value);
+  fd.append('Assessment Date',document.getElementById('assessDate').value);
+  fd.append('Overall Score',overallStr);
+  fd.append('Readiness Band',bandLabel);
+  fd.append('Framework','5A-ProductivityAxis — Low Productivity');
+  DIMS.forEach((d,di)=>{fd.append('Score — '+d.name,dimScores[di].toFixed(2));});
+  if(rev){fd.append('Estimated Gap (Cr)',(rev*0.10*(1-(overall/5))).toFixed(1));}
+  fd.append('_cc','contact@miraiaxisconsulting.com');
+  if(pdfBlob){
+    const safeOrg=(org||'Client').replace(/[^a-z0-9]+/gi,'_');
+    fd.append('attachment',pdfBlob,'MiraiAxis_LowProductivity_Report_'+safeOrg+'.pdf');
+  }
+  try{
+    await fetch('https://formspree.io/f/xgojokwd',{method:'POST',headers:{'Accept':'application/json'},body:fd});
+  }catch(err){
+    console.error('Submission failed',err);
+  }
 }
 
 let radarChart=null;
@@ -1394,24 +1552,6 @@ function renderRadar(dimScores){
       elements:{line:{tension:0}},
     }
   });
-}
-
-function sendToFormspree(org,overall,overallStr,bandLabel,dimScores,rev){
-  const data={
-    'Organisation':org,
-    'Respondent Name':document.getElementById('respName').value,
-    'Role':document.getElementById('respRole').value,
-    'Industry':document.getElementById('industry').value,
-    'Annual Revenue (Cr)':document.getElementById('revenue').value,
-    'Location':document.getElementById('plantLocation').value,
-    'Assessment Date':document.getElementById('assessDate').value,
-    'Overall Score':overallStr,
-    'Readiness Band':bandLabel,
-    'Framework':'5A-ProductivityAxis — Low Productivity'
-  };
-  DIMS.forEach((d,di)=>{data['Score — '+d.name]=dimScores[di].toFixed(2);});
-  if(rev){data['Estimated Gap (Cr)']=(rev*0.10*(1-(overall/5))).toFixed(1);}
-  fetch('https://formspree.io/f/xgojokwd',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(data)});
 }
 
 function resetForm(){
