@@ -1489,13 +1489,17 @@ async function generateAndSendReport(org,overall,overallStr,bandLabel,dimScores,
   fd.append('access_key','33488906-4001-44bb-995f-e72344238259');
   fd.append('subject','New 5A Low Productivity Assessment — '+org);
   fd.append('from_name','Mirai Axis Assessment Form');
-  fd.append('email','contact@miraiaxisconsulting.com');
   if(pdfBlob){
     const safeOrg=(org||'Client').replace(/[^a-z0-9]+/gi,'_');
     fd.append('attachment',pdfBlob,'MiraiAxis_LowProductivity_Report_'+safeOrg+'.pdf');
   }
   try{
-    await fetch('https://api.web3forms.com/submit',{method:'POST',headers:{'Accept':'application/json'},body:fd});
+    const resp=await fetch('https://api.web3forms.com/submit',{method:'POST',headers:{'Accept':'application/json'},body:fd});
+    const result=await resp.json();
+    console.log('Web3Forms response:',result);
+    if(!result.success){
+      console.error('Web3Forms rejected the submission:',result.message);
+    }
   }catch(err){
     console.error('Submission failed',err);
   }
