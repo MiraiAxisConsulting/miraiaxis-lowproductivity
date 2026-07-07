@@ -1354,127 +1354,59 @@ async function generateAndSendReport(org,overall,overallStr,bandLabel,dimScores,
   let pdfBlob=null;
   try{
     const {jsPDF}=window.jspdf;
+
+    // The beautiful report panel is already filled in. We photograph it exactly
+    // as it looks on screen, so the emailed PDF matches the client-facing design.
+    const panel=document.getElementById('resultsPanel');
+
+    // Hide the on-screen buttons so they don't appear in the PDF
+    const actionButtons=panel.querySelector('.results-actions');
+    const prevActionDisplay=actionButtons?actionButtons.style.display:'';
+    if(actionButtons)actionButtons.style.display='none';
+
+    // Make the panel visible but tucked far off-screen so the client never sees it
+    const prevShow=panel.classList.contains('show');
+    panel.style.position='absolute';
+    panel.style.left='-9999px';
+    panel.style.top='0';
+    panel.style.width='800px';
+    panel.classList.add('show');
+
+    // Give the radar chart a moment to finish drawing before we snap the photo
+    await new Promise(r=>setTimeout(r,600));
+
+    const canvas=await html2canvas(panel,{
+      scale:2,
+      useCORS:true,
+      backgroundColor:'#ffffff',
+      windowWidth:800
+    });
+
+    // Put the panel back exactly how it was
+    panel.style.position='';
+    panel.style.left='';
+    panel.style.top='';
+    panel.style.width='';
+    if(!prevShow)panel.classList.remove('show');
+    if(actionButtons)actionButtons.style.display=prevActionDisplay;
+
+    // Build the PDF, slicing the tall image across A4 pages
     const pdf=new jsPDF('p','pt','a4');
-    const pageW=595.28;
-    const navy=[27,42,74], gold=[201,168,76];
-    let y=50;
+    const pageW=595.28, pageH=841.89;
+    const imgW=pageW;
+    const imgH=canvas.height*(imgW/canvas.width);
+    const imgData=canvas.toDataURL('image/png');
 
-    pdf.setFont('helvetica','bold');
-    pdf.setFontSize(18);
-    pdf.setTextColor(...navy);
-    pdf.text('Mirai Axis Consulting LLP',40,y);
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica','normal');
-    pdf.setTextColor(120,120,120);
-    y+=18;
-    pdf.text('Low Productivity Intelligence Assessment — Internal Report',40,y);
-    y+=6;
-    pdf.setDrawColor(...gold);
-    pdf.setLineWidth(1.2);
-    pdf.line(40,y+6,pageW-40,y+6);
-    y+=30;
-
-    pdf.setFontSize(11);
-    pdf.setTextColor(60,60,60);
-    const respName=document.getElementById('respName').value||'—';
-    const respRole=document.getElementById('respRole').value||'—';
-    const industry=document.getElementById('industry').value||'—';
-    const location=document.getElementById('plantLocation').value||'—';
-    const assessDate=document.getElementById('assessDate').value||'—';
-    const details=[
-      ['Organisation',org],
-      ['Respondent',respName+'  ('+respRole+')'],
-      ['Industry',industry],
-      ['Location',location],
-      ['Assessment Date',assessDate],
-      ['Annual Revenue (Cr)',rev?('₹'+rev):'—'],
-    ];
-    details.forEach(([label,val])=>{
-      pdf.setFont('helvetica','bold');
-      pdf.text(label+':',40,y);
-      pdf.setFont('helvetica','normal');
-      pdf.text(String(val),190,y);
-      y+=16;
-    });
-    y+=14;
-
-    pdf.setFillColor(245,246,250);
-    pdf.roundedRect(40,y,pageW-80,60,6,6,'F');
-    pdf.setFont('helvetica','bold');
-    pdf.setFontSize(22);
-    pdf.setTextColor(...navy);
-    pdf.text(overallStr+' / 5.00',55,y+38);
-    pdf.setFontSize(11);
-    pdf.setTextColor(150,110,20);
-    pdf.text(bandLabel,55,y+52);
-    if(rev){
-      const gap=(rev*0.10*(1-(overall/5))).toFixed(1);
-      pdf.setFont('helvetica','bold');
-      pdf.setFontSize(13);
-      pdf.setTextColor(...navy);
-      pdf.text('Estimated Productivity Gap: ₹'+gap+' Crores',300,y+32);
+    let heightLeft=imgH;
+    let position=0;
+    pdf.addImage(imgData,'PNG',0,position,imgW,imgH);
+    heightLeft-=pageH;
+    while(heightLeft>0){
+      position-=pageH;
+      pdf.addPage();
+      pdf.addImage(imgData,'PNG',0,position,imgW,imgH);
+      heightLeft-=pageH;
     }
-    y+=85;
-
-    if(radarChart){
-      try{
-        const chartImg=radarChart.toBase64Image('image/png',1.0);
-        const imgSize=260;
-        pdf.setFont('helvetica','bold');
-        pdf.setFontSize(12);
-        pdf.setTextColor(...navy);
-        pdf.text('Current vs Best-in-Class — Gap Radar',40,y);
-        y+=10;
-        pdf.addImage(chartImg,'PNG',(pageW-imgSize)/2,y,imgSize,imgSize);
-        y+=imgSize+20;
-      }catch(chartErr){
-        console.error('Chart image failed, continuing without it.',chartErr);
-      }
-    }
-
-    if(y>680){pdf.addPage();y=50;}
-    pdf.setFont('helvetica','bold');
-    pdf.setFontSize(12);
-    pdf.setTextColor(...navy);
-    pdf.text('Dimension Breakdown',40,y);
-    y+=18;
-    pdf.setFontSize(10);
-    DIMS.forEach((d,di)=>{
-      if(y>760){pdf.addPage();y=50;}
-      const s=dimScores[di];
-      pdf.setFont('helvetica','bold');
-      pdf.setTextColor(...navy);
-      pdf.text(d.code+' — '+d.name,40,y);
-      pdf.setFont('helvetica','normal');
-      pdf.setTextColor(80,80,80);
-      pdf.text(s.toFixed(2)+' / 5.00  ('+getBand(s).label+')',400,y);
-      y+=16;
-    });
-    y+=14;
-
-    if(y>700){pdf.addPage();y=50;}
-    const sorted=[...dimScores.map((s,i)=>({s,i}))].sort((a,b)=>b.s-a.s);
-    const top3=sorted.slice(0,3).map(x=>DIMS[x.i].name).join(', ');
-    const bot3=sorted.slice(-3).reverse().map(x=>DIMS[x.i].name).join(', ');
-    pdf.setFont('helvetica','bold');
-    pdf.setFontSize(12);
-    pdf.setTextColor(...navy);
-    pdf.text('Recommended Next Steps',40,y);
-    y+=18;
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica','normal');
-    pdf.setTextColor(80,80,80);
-    const notes=[
-      'Share this report with leadership and align on priority gaps.',
-      'Focus first on lowest-scoring dimensions: '+bot3+'.',
-      'Schedule a consultant-led Gemba diagnostic to validate scores and build a 90-day action plan.',
-      'Protect and build on strongest dimensions: '+top3+'.'
-    ];
-    notes.forEach(n=>{
-      const lines=pdf.splitTextToSize(n,pageW-80);
-      pdf.text(lines,40,y);
-      y+=lines.length*14+6;
-    });
 
     pdfBlob=pdf.output('blob');
   }catch(err){
