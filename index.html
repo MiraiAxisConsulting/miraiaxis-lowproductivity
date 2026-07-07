@@ -1567,17 +1567,6 @@ function resetForm(){
 }
 
 buildDims();
-
-const ACCESS_CODE="PRODUCTIVITY2026";
-function checkPassword(){
-  const entered=document.getElementById('lockPassword').value.trim();
-  if(entered.toUpperCase()===ACCESS_CODE){
-    document.body.classList.remove('locked');
-    document.getElementById('lockOverlay').style.display='none';
-  }else{
-    document.getElementById('lockError').style.display='block';
-  }
-}
 </script>
 </div>
 </body>
