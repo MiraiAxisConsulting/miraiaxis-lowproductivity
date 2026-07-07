@@ -1372,8 +1372,27 @@ async function generateAndSendReport(org,overall,overallStr,bandLabel,dimScores,
     panel.style.width='800px';
     panel.classList.add('show');
 
-    // Give the radar chart a moment to finish drawing before we snap the photo
+    // Give the radar chart a moment to finish drawing
     await new Promise(r=>setTimeout(r,600));
+
+    // html2canvas cannot reliably photograph a live Chart.js canvas, so the radar
+    // comes out empty. We ask the chart for its own picture and drop that image
+    // in place of the live canvas just for the photo, then restore it afterwards.
+    const radarWrap=panel.querySelector('.radar-chart-wrap');
+    let tempImg=null, liveCanvas=null;
+    if(radarChart && radarWrap){
+      const chartPng=radarChart.toBase64Image('image/png',1.0);
+      liveCanvas=radarWrap.querySelector('canvas');
+      tempImg=document.createElement('img');
+      tempImg.src=chartPng;
+      tempImg.style.width='100%';
+      tempImg.style.height='100%';
+      tempImg.style.objectFit='contain';
+      if(liveCanvas)liveCanvas.style.display='none';
+      radarWrap.appendChild(tempImg);
+      // Let the image paint before we snap
+      await new Promise(r=>setTimeout(r,200));
+    }
 
     const canvas=await html2canvas(panel,{
       scale:2,
@@ -1381,6 +1400,10 @@ async function generateAndSendReport(org,overall,overallStr,bandLabel,dimScores,
       backgroundColor:'#ffffff',
       windowWidth:800
     });
+
+    // Restore the live chart
+    if(tempImg){radarWrap.removeChild(tempImg);}
+    if(liveCanvas){liveCanvas.style.display='';}
 
     // Put the panel back exactly how it was
     panel.style.position='';
@@ -1500,6 +1523,7 @@ function renderRadar(dimScores){
     options:{
       responsive:true,
       maintainAspectRatio:false,
+      animation:false,
       plugins:{legend:{display:false}},
       scales:{
         r:{
