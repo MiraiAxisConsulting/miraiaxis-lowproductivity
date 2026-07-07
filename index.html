@@ -143,19 +143,7 @@ body.locked #mainContent{display:none}
 @media print{.site-header,.hero,.submit-section,.results-actions{display:none!important}.results-panel{border:1px solid #ccc}body{background:#fff}}
 </style>
 </head>
-<body class="locked">
-
-<div class="lock-overlay" id="lockOverlay">
-  <div class="lock-box">
-    <div class="lock-logo">Mirai Axis <span>Consulting LLP</span></div>
-    <div class="lock-sub">Confidential Assessment</div>
-    <div class="lock-title">Please enter the access code shared with you by email to open this questionnaire.</div>
-    <input type="password" id="lockPassword" placeholder="Enter access code" autocomplete="off" onkeydown="if(event.key==='Enter')checkPassword()">
-    <button class="lock-btn" onclick="checkPassword()">Unlock Questionnaire</button>
-    <div class="lock-error" id="lockError">That code doesn't match. Please check the email and try again.</div>
-    <div class="lock-footer">Mirai Axis Consulting LLP &nbsp;|&nbsp; LLPIN: ACW-3962 &nbsp;|&nbsp; Confidential</div>
-  </div>
-</div>
+<body>
 
 <div id="passwordPrompt" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:2000">
   <div style="background:white;padding:40px;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.3);max-width:420px;width:90%;text-align:center">
