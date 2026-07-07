@@ -1481,26 +1481,47 @@ async function generateAndSendReport(org,overall,overallStr,bandLabel,dimScores,
     console.error('PDF generation failed, will send data only.',err);
   }
 
-  const fd=new FormData();
-  fd.append('Organisation',org);
-  fd.append('Respondent Name',document.getElementById('respName').value);
-  fd.append('Role',document.getElementById('respRole').value);
-  fd.append('Industry',document.getElementById('industry').value);
-  fd.append('Annual Revenue (Cr)',document.getElementById('revenue').value);
-  fd.append('Location',document.getElementById('plantLocation').value);
-  fd.append('Assessment Date',document.getElementById('assessDate').value);
-  fd.append('Overall Score',overallStr);
-  fd.append('Readiness Band',bandLabel);
-  fd.append('Framework','5A-ProductivityAxis — Low Productivity');
-  DIMS.forEach((d,di)=>{fd.append('Score — '+d.name,dimScores[di].toFixed(2));});
-  if(rev){fd.append('Estimated Gap (Cr)',(rev*0.10*(1-(overall/5))).toFixed(1));}
-  fd.append('_cc','contact@miraiaxisconsulting.com');
+  // Build the data object to send to Google Apps Script
+  const payload={};
+  payload['Organisation']=org;
+  payload['Respondent Name']=document.getElementById('respName').value;
+  payload['Role']=document.getElementById('respRole').value;
+  payload['Industry']=document.getElementById('industry').value;
+  payload['Annual Revenue (Cr)']=document.getElementById('revenue').value;
+  payload['Location']=document.getElementById('plantLocation').value;
+  payload['Assessment Date']=document.getElementById('assessDate').value;
+  payload['Overall Score']=overallStr;
+  payload['Readiness Band']=bandLabel;
+  payload['Framework']='5A-ProductivityAxis — Low Productivity';
+  DIMS.forEach((d,di)=>{payload['Score — '+d.name]=dimScores[di].toFixed(2);});
+  if(rev){payload['Estimated Gap (Cr)']=(rev*0.10*(1-(overall/5))).toFixed(1);}
+
+  const safeOrg=(org||'Client').replace(/[^a-z0-9]+/gi,'_');
+  payload['filename']='MiraiAxis_LowProductivity_Report_'+safeOrg+'.pdf';
+
+  // Convert PDF blob to base64 string
   if(pdfBlob){
-    const safeOrg=(org||'Client').replace(/[^a-z0-9]+/gi,'_');
-    fd.append('attachment',pdfBlob,'MiraiAxis_LowProductivity_Report_'+safeOrg+'.pdf');
+    try{
+      const base64=await new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onloadend=()=>resolve(reader.result.split(',')[1]);
+        reader.onerror=reject;
+        reader.readAsDataURL(pdfBlob);
+      });
+      payload['pdfBase64']=base64;
+    }catch(err){
+      console.error('Could not convert PDF to base64',err);
+    }
   }
+
+  // Send everything to your Google Apps Script Web App
   try{
-    await fetch('https://formspree.io/f/xgojokwd',{method:'POST',headers:{'Accept':'application/json'},body:fd});
+    await fetch('https://script.google.com/macros/s/AKfycbxFAZD5BI0p5eCEQgsKPeAOBy2COvF8yV_cw56YUyW1V8NKYLrlqPYx00RNyJljaOqM/exec',{
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload)
+    });
   }catch(err){
     console.error('Submission failed',err);
   }
