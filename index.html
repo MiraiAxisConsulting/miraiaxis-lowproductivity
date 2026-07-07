@@ -334,8 +334,14 @@ function checkPassword(){
   }
 }
 
-document.getElementById('passwordInput').addEventListener('keypress',function(e){
-  if(e.key==='Enter')checkPassword();
+document.addEventListener('DOMContentLoaded',function(){
+  const pwdInput=document.getElementById('passwordInput');
+  if(pwdInput){
+    pwdInput.addEventListener('keypress',function(e){
+      if(e.key==='Enter')checkPassword();
+    });
+    pwdInput.focus();
+  }
 });
 
 const DIMS=[
